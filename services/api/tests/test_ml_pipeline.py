@@ -113,3 +113,39 @@ def test_regression_baseline_comparison(client, admin_headers):
     for key in ("mae", "rmse", "r2"):
         assert key in result.metrics
         assert key in result.metrics["baseline_dummy"]
+
+
+def test_retrain_endpoint(client, admin_headers, monkeypatch):
+    from app.routers import ml as ml_router
+
+    # Evita lanzar el subproceso de entrenamiento durante la prueba.
+    monkeypatch.setattr(ml_router, "_train_in_background", lambda *a, **k: None)
+
+    db = SessionLocal()
+    try:
+        exp = MlExperiment(
+            name=f"retrain-{uuid4().hex[:6]}",
+            task_type="classification",
+            algorithm="random_forest",
+            status="completed",
+        )
+        db.add(exp)
+        db.commit()
+        db.refresh(exp)
+        experiment_id = str(exp.id)
+    finally:
+        db.close()
+
+    res = client.post(f"/api/v1/ml/experiments/{experiment_id}/train", headers=admin_headers)
+    assert res.status_code == 202, res.text
+    assert res.json()["status"] == "running"
+
+    # Un segundo reentrenamiento mientras corre debe rechazarse.
+    again = client.post(f"/api/v1/ml/experiments/{experiment_id}/train", headers=admin_headers)
+    assert again.status_code == 409
+
+    missing = client.post(f"/api/v1/ml/experiments/{uuid4()}/train", headers=admin_headers)
+    assert missing.status_code == 404
+
+    logs = client.get("/api/v1/audit-logs?action=ml.experiment.retrain", headers=admin_headers)
+    assert any(entry["entity_id"] == experiment_id for entry in logs.json())

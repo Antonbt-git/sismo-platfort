@@ -1,20 +1,19 @@
-# Despliegue en Render: API FastAPI + worker de ingesta IGP/CENSIS.
-# La base de datos vive en Supabase (externa); aqui solo se declaran los servicios.
-# Los valores marcados con `sync: false` se completan en el panel de Render.
+# Despliegue en Render con plan GRATUITO: solo el servicio web de la API.
+# - Sin disco persistente: los artefactos ML se guardan tambien en la BD
+#   (ml_experiments.artifact_blob), asi que sobreviven a reinicios.
+# - La ingesta IGP/CENSIS no puede correr como worker (es de pago): se ejecuta
+#   con el workflow programado de GitHub Actions (.github/workflows/ingest.yml).
+# La base de datos vive en Supabase (externa).
 services:
   - type: web
     name: sismo-api
     runtime: docker
     dockerfilePath: ./infra/docker/Dockerfile.backend
     dockerContext: .
-    plan: starter
+    plan: free
     region: oregon
     healthCheckPath: /health
     autoDeploy: true
-    disk:
-      name: sismo-data
-      mountPath: /app/var
-      sizeGB: 1
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -28,31 +27,6 @@ services:
         value: "600"
       - key: CORS_ORIGINS
         sync: false
-      - key: INGESTA_INTERVAL_SECONDS
-        value: "300"
-      - key: INGESTA_MIN_MAGNITUDE
-        value: "2.5"
-      - key: INGESTA_LOOKBACK_HOURS
-        value: "24"
-      - key: ARTIFACTS_DIR
-        value: /app/var/artifacts
-      - key: REPORTS_DIR
-        value: /app/var/reports
-
-  - type: worker
-    name: sismo-ingesta
-    runtime: docker
-    dockerfilePath: ./infra/docker/Dockerfile.backend
-    dockerContext: .
-    plan: starter
-    region: oregon
-    autoDeploy: true
-    dockerCommand: python /app/services/ingestion/sync.py --loop --interval 300
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: SECRET_KEY
-        generateValue: true
       - key: INGESTA_INTERVAL_SECONDS
         value: "300"
       - key: INGESTA_MIN_MAGNITUDE

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { Card, ErrorBox, HeroStat, Spinner, StatCard, Tag } from "../../components/ui";
 import { api, qs } from "../../lib/api";
@@ -35,8 +35,6 @@ const TOOLTIP_STYLE = {
   boxShadow: "0 10px 28px -14px rgba(27,42,94,.25)",
   fontSize: 12,
 };
-
-const STATUS_COLORS: Record<string, string> = { ok: "#20c4a3", error: "#f06595" };
 
 const ICONS = {
   clock: "M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
@@ -93,18 +91,6 @@ export default function DashboardPage() {
   if (error) return <ErrorBox error={error} />;
   if (!summary) return <Spinner text="Cargando dashboard…" />;
 
-  // Estado de fuentes agrupado para el anillo
-  const statusCount = summary.sources.reduce<Record<string, number>>((acc, src) => {
-    acc[src.status] = (acc[src.status] ?? 0) + 1;
-    return acc;
-  }, {});
-  const donut = Object.entries(statusCount).map(([status, value]) => ({
-    status,
-    value,
-    color: STATUS_COLORS[status] ?? "#cbd0e3",
-  }));
-  const sourcesOk = statusCount["ok"] ?? 0;
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -146,7 +132,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
-        <div className="md:col-span-2 xl:col-span-5">
+        <div className="md:col-span-2 xl:col-span-7">
           <Card
             title="Eventos a lo largo del tiempo"
             subtitle={`Fuente: sismos observados · granularidad diaria · ${active.short}`}
@@ -173,49 +159,7 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <div className="xl:col-span-3">
-          <Card title="Salud de fuentes" subtitle="Conectores por estado">
-            {donut.length === 0 ? (
-              <p className="text-sm text-slate-500">Sin fuentes configuradas.</p>
-            ) : (
-              <>
-                <div className="relative h-40">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={donut} dataKey="value" nameKey="status" innerRadius={52} outerRadius={72} paddingAngle={3} cornerRadius={6} stroke="none">
-                        {donut.map((d) => (
-                          <Cell key={d.status} fill={d.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-                    <div>
-                      <p className="text-2xl font-bold tabular-nums text-ink">
-                        {sourcesOk}/{summary.sources.length}
-                      </p>
-                      <p className="text-[11px] text-slate-500">en estado ok</p>
-                    </div>
-                  </div>
-                </div>
-                <ul className="mt-3 space-y-1.5 text-xs text-slate-600">
-                  {donut.map((d) => (
-                    <li key={d.status} className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-                        {d.status}
-                      </span>
-                      <span className="font-semibold tabular-nums text-slate-700">{d.value}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </Card>
-        </div>
-
-        <div className="xl:col-span-4">
+        <div className="xl:col-span-5">
           <Card
             title="Distribucion por magnitud"
             subtitle={`Conteo por rango · ${active.short} · limites de la fuente`}

@@ -1,0 +1,41 @@
+name: Ingesta IGP/CENSIS
+
+# Sustituye al worker de pago de Render: sincroniza las fuentes habilitadas
+# contra Supabase de forma programada (y a mano desde la pestana Actions).
+#
+# Requisito: definir el secreto de repositorio SUPABASE_DATABASE_URL
+# (Settings -> Secrets and variables -> Actions -> New repository secret).
+
+on:
+  schedule:
+    # Cada hora en punto (UTC). Con repo publico se puede bajar a "*/30 * * * *".
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ingesta
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r services/api/requirements.txt
+          pip install -e services/api
+
+      - name: Sincronizar fuentes habilitadas
+        working-directory: services
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY || 'ingesta-ci' }}
+        run: python ingestion/sync.py --hours 24

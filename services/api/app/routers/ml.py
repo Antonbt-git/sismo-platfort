@@ -85,6 +85,49 @@ def create_experiment(
     return experiment
 
 
+@router.post("/ml/experiments/{experiment_id}/train", response_model=ExperimentOut, status_code=202)
+def retrain_experiment(
+    experiment_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require("ml:train")),
+):
+    """Reentrena un experimento existente con el mismo algoritmo y dataset/ventana."""
+    experiment = db.get(MlExperiment, experiment_id)
+    if experiment is None:
+        raise HTTPException(status_code=404, detail="Experimento no encontrado")
+    if experiment.status == "running":
+        raise HTTPException(status_code=409, detail="El experimento ya se esta entrenando")
+
+    before = {"status": experiment.status, "metrics": experiment.metrics}
+    experiment.status = "running"
+    experiment.limitations = "Reentrenamiento en curso; las limitaciones se registran al finalizar."
+    db.commit()
+    db.refresh(experiment)
+
+    log_action(
+        db,
+        action="ml.experiment.retrain",
+        entity_type="ml_experiment",
+        actor_id=user.id,
+        actor_email=user.email,
+        entity_id=str(experiment.id),
+        before=before,
+        after={"algorithm": experiment.algorithm, "dataset_id": str(experiment.dataset_id) if experiment.dataset_id else None},
+        request=request,
+    )
+
+    window = (experiment.params or {}).get("window") or {}
+    background_tasks.add_task(
+        _train_in_background,
+        str(experiment.id),
+        window.get("date_from"),
+        window.get("date_to"),
+    )
+    return experiment
+
+
 @router.get("/ml/experiments", response_model=list[ExperimentOut])
 def list_experiments(
     db: Session = Depends(get_db),
@@ -211,7 +254,7 @@ def publish_estimate(
 
     frame = build_feature_frame(events)[FEATURES].dropna()
     if experiment.task_type == "classification":
-        clf = load_artifact(experiment.artifact_uri)
+        clf = load_artifact(experiment.artifact_uri, experiment)
         proba = clf.predict_proba(frame)
         classes = list(getattr(clf, "classes_", []))
         # Probabilidad de banda moderada o superior (indice 1+)
@@ -219,7 +262,7 @@ def publish_estimate(
         value = float(sum(proba[:, i] for i in idx).mean()) if idx else 0.0
         metric = "prob_evento_mayor_o_igual_magnitud_4.5"
     else:
-        reg = load_artifact(experiment.artifact_uri)
+        reg = load_artifact(experiment.artifact_uri, experiment)
         preds = reg.predict(frame)
         value = float(preds.mean())
         metric = "profundidad_estimada_media_km"

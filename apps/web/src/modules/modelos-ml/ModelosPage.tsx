@@ -64,6 +64,16 @@ export default function ModelosPage() {
     }
   }
 
+  async function retrain(experimentId: string) {
+    setError(null);
+    try {
+      await api(`/api/v1/ml/experiments/${experimentId}/train`, { method: "POST" });
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al reentrenar el experimento");
+    }
+  }
+
   async function approve(modelId: string, action: "approve" | "reject") {
     try {
       await api(`/api/v1/ml/models/${modelId}/${action}`, { method: "POST" });
@@ -168,6 +178,7 @@ export default function ModelosPage() {
                     <th className="px-3 py-2">Metricas</th>
                     <th className="px-3 py-2">Estado</th>
                     <th className="px-3 py-2">Fecha</th>
+                    <th className="px-3 py-2">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -198,6 +209,21 @@ export default function ModelosPage() {
                         </td>
                         <td className="px-3 py-1.5"><Tag value={exp.status} /></td>
                         <td className="px-3 py-1.5 text-xs">{new Date(exp.created_at).toLocaleString()}</td>
+                        <td className="px-3 py-1.5">
+                          {hasRole("analyst") ? (
+                            <button
+                              type="button"
+                              onClick={() => retrain(exp.id)}
+                              disabled={exp.status === "running"}
+                              title="Vuelve a entrenar con el mismo algoritmo, dataset y ventana"
+                              className="whitespace-nowrap rounded border border-brand-300 px-2 py-0.5 text-xs font-medium text-brand-700 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {exp.status === "running" ? "Entrenando…" : "Reentrenar"}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

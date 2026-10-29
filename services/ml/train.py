@@ -10,6 +10,7 @@ evitar fuga de datos; semilla fija; metricas y limitaciones registradas en ml_ex
 from __future__ import annotations
 
 import argparse
+import io
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -235,6 +236,7 @@ def train_experiment(
         artifacts.mkdir(parents=True, exist_ok=True)
         artifact_path = artifacts / f"{exp.id}.joblib"
         joblib.dump(model, artifact_path)
+        artifact_bytes = artifact_path.read_bytes()
 
         exp.feature_spec = FEATURES
         exp.target_name = "mag_band" if exp.task_type == "classification" else "depth_km"
@@ -247,6 +249,12 @@ def train_experiment(
                  "rows": dataset.row_count, "query_spec": dataset.query_spec}
                 if dataset is not None else None
             ),
+            # Ventana efectiva usada: permite reentrenar reproduciendo los mismos datos.
+            "window": {
+                "date_from": df_date.isoformat() if df_date else None,
+                "date_to": dt_date.isoformat() if dt_date else None,
+                "rows": int(len(df)),
+            },
         }
         exp.metrics = metrics
         exp.validation_spec = {
@@ -264,7 +272,13 @@ def train_experiment(
             "numpy": np.__version__,
         }
         exp.status = "completed"
-        exp.artifact_uri = str(artifact_path)
+        project_root = Path(__file__).resolve().parents[2]
+        try:
+            # Ruta relativa a la raiz del proyecto: portable entre entornos.
+            exp.artifact_uri = str(artifact_path.relative_to(project_root))
+        except ValueError:
+            exp.artifact_uri = str(artifact_path)
+        exp.artifact_blob = artifact_bytes
         exp.limitations = LIMITACIONES_CLF if exp.task_type == "classification" else LIMITACIONES_REG
         exp.dataset_id = exp.dataset_id
 
@@ -286,19 +300,27 @@ def train_experiment(
         db.close()
 
 
-def load_artifact(uri: str):
-    p = Path(uri)
-    candidates = [p]
-    if not p.is_absolute():
-        candidates += [
-            Path(__file__).resolve().parents[2] / p,  # raiz del proyecto
-            Path(__file__).resolve().parents[1] / p,  # services/
-            Path(__file__).resolve().parents[1] / "api" / p,  # services/api
-        ]
-    for c in candidates:
-        if c.exists():
-            return joblib.load(c)
-    return joblib.load(p)
+def load_artifact(uri: str | None, experiment=None):
+    """Carga el modelo desde disco o, si el archivo no existe (contenedor efimero),
+    desde la copia guardada en la base de datos (`ml_experiments.artifact_blob`)."""
+    if uri:
+        p = Path(uri)
+        candidates = [p]
+        if not p.is_absolute():
+            candidates += [
+                Path(__file__).resolve().parents[2] / p,  # raiz del proyecto
+                Path(__file__).resolve().parents[1] / p,  # services/
+                Path(__file__).resolve().parents[1] / "api" / p,  # services/api
+            ]
+        for c in candidates:
+            if c.exists():
+                return joblib.load(c)
+    blob = getattr(experiment, "artifact_blob", None)
+    if blob:
+        return joblib.load(io.BytesIO(blob))
+    if not uri:
+        raise FileNotFoundError("El experimento no tiene artefacto entrenado")
+    return joblib.load(Path(uri))
 
 
 def main() -> None:

@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -150,6 +151,9 @@ class MlExperiment(Base):
     library_versions: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(20), default="completed")  # running | completed | failed
     artifact_uri: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Copia del .joblib dentro de la BD: en despliegues sin disco persistente
+    # (Render free) el sistema de archivos es efimero y el artefacto se perderia.
+    artifact_blob: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
     limitations: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

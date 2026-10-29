@@ -1,18 +1,20 @@
-# Despliegue: Vercel (web) + Render (API e ingesta)
+# Despliegue gratuito: Vercel (web) + Render (API) + Supabase (datos)
 
-Arquitectura del despliegue:
+Arquitectura, todo en planes gratuitos:
 
 ```
 Navegador
-  └─ Vercel  ── apps/web (React + Vite, sitio estático)
-       └─ VITE_API_URL ──► Render ── sismo-api (FastAPI + Docker)
-                                │
-                                ├─ Supabase (PostgreSQL, datos)
-                                └─ Render ── sismo-ingesta (worker IGP/CENSIS)
+  └─ Vercel  ── apps/web (React + Vite, sitio estatico, plan Hobby)
+       └─ VITE_API_URL ──► Render ── sismo-api (FastAPI, Docker, plan free)
+                                └─ Supabase (PostgreSQL)
+GitHub Actions (cron cada hora) ── ingestion/sync.py ──► Supabase
 ```
 
-La base de datos ya vive en Supabase, así que solo se despliegan el frontend y los dos procesos de
-`services/` (API y daemon de ingesta).
+El plan free de Render no incluye disco persistente ni workers, por eso:
+
+- Los artefactos `.joblib` se guardan **tambien en la base de datos**
+  (`ml_experiments.artifact_blob`), así los modelos siguen funcionando tras cada reinicio.
+- La ingesta IGP/CENSIS corre con un **workflow programado de GitHub Actions** en lugar de un worker.
 
 ## 0. Requisitos previos
 
@@ -28,42 +30,52 @@ La base de datos ya vive en Supabase, así que solo se despliegan el frontend y 
 
   `.gitignore` ya excluye `.env`, `var/`, `node_modules/`, `dist/` y los `*.sqlite3`.
 
-- Cuentas en Vercel y Render conectadas a ese repositorio.
+- Cuentas gratuitas en Vercel, Render y GitHub.
 
-## 1. API en Render
+## 1. API en Render (free)
 
-El archivo `render.yaml` de la raíz ya declara el servicio web y el worker; con él basta un click.
-
-1. Render → **New +** → **Blueprint** → seleccionar el repositorio.
-2. Render detecta `render.yaml` y propone dos servicios:
-   - `sismo-api` (web, Docker, `infra/docker/Dockerfile.backend`), health check `/health`.
-   - `sismo-ingesta` (worker, mismo Docker, comando `python /app/services/ingestion/sync.py --loop --interval 300`).
-3. Completar las variables marcadas con `sync: false` en **sismo-api**:
+1. Render → **New +** → **Web Service** → conectar el repositorio (no hace falta Blueprint).
+2. Configuración:
+   - **Language / Runtime**: Docker
+   - **Dockerfile Path**: `infra/docker/Dockerfile.backend`
+   - **Docker Build Context Directory**: `.` (raíz del repo)
+   - **Instance Type**: Free
+   - **Health Check Path**: `/health`
+3. **Environment Variables**:
 
    | Variable | Valor |
    |---|---|
    | `DATABASE_URL` | `postgresql+psycopg://postgres.<ref>:<clave>@aws-1-us-west-2.pooler.supabase.com:5432/postgres` |
    | `SEED_ADMIN_PASSWORD` | contraseña del admin (si el usuario ya existe en Supabase no se sobrescribe) |
    | `CORS_ORIGINS` | `["https://<tu-app>.vercel.app"]` |
+   | `SECRET_KEY` | cualquier cadena larga aleatoria (`openssl rand -hex 32`) |
+   | `ACCESS_TOKEN_EXPIRE_MINUTES` | `600` |
+   | `ARTIFACTS_DIR` | `/app/var/artifacts` |
+   | `REPORTS_DIR` | `/app/var/reports` |
 
-   `SECRET_KEY` se genera automáticamente. El resto (`ARTIFACTS_DIR=/app/var/artifacts`,
-   `REPORTS_DIR=/app/var/reports`, intervalos de ingesta) ya viene en el blueprint.
-4. En el worker `sismo-ingesta` basta repetir `DATABASE_URL` (las demás variables ya están).
-5. Desplegar y comprobar `https://sismo-api.onrender.com/health` → `{"status":"ok"}`.
+4. Deploy y comprobar `https://sismo-api.onrender.com/health` → `{"status":"ok"}`.
 
-Notas:
+> El archivo `render.yaml` de la raíz describe esta misma configuración gratuita por si prefieres
+> **New + → Blueprint**; también funciona sin coste (no declara disco ni worker).
 
-- El blueprint usa `plan: starter` porque el disco persistente de 1 GB (`/app/var`) solo existe en
-  planes pagados. En el plan free hay que quitar el bloque `disk`; los artefactos `.joblib` y los
-  reportes generados se pierden en cada reinicio/despliegue.
-- El esquema se crea solo: la API llama a `Base.metadata.create_all()` y a `seed_all()` al arrancar.
-- Si se despliega sin `render.yaml` (servicio manual), usar **Environment: Docker**,
-  **Dockerfile Path** `infra/docker/Dockerfile.backend`, **Docker Context** `.` y **Health Check Path** `/health`.
+## 2. Ingesta automática sin worker (GitHub Actions)
 
-## 2. Frontend en Vercel
+El cron vive en `.github/workflows/ingest.yml` (cada hora, y también manual desde *Actions →
+Ingesta IGP/CENSIS → Run workflow*).
+
+1. GitHub → **Settings → Secrets and variables → Actions → New repository secret**:
+   - `SUPABASE_DATABASE_URL` = la misma cadena `postgresql+psycopg://...` de Supabase.
+   - (opcional) `SECRET_KEY` = la misma de Render.
+2. Verificar en *Actions* que la primera ejecución termina en verde y que en la web aparecen
+   eventos nuevos / registros en Auditoría.
+
+Frecuencia: cada hora (`0 * * * *`). Con repositorio público se puede usar `*/30 * * * *` sin
+consumir minutos; en repositorio privado, cada hora mantiene el consumo dentro del plan gratuito.
+
+## 3. Frontend en Vercel (Hobby)
 
 1. Vercel → **Add New…** → **Project** → importar el repositorio.
-2. Configuración del proyecto:
+2. Configuración:
    - **Root Directory**: `apps/web`
    - **Framework Preset**: Vite (autodetectado)
    - **Build Command**: `npm run build`
@@ -78,42 +90,52 @@ Notas:
 4. Deploy. `apps/web/vercel.json` ya incluye el rewrite de SPA para que rutas como `/eventos` o
    `/estimaciones` funcionen al recargar.
 
-## 3. Cerrar el círculo (CORS)
+## 4. Cerrar el círculo (CORS)
 
-Cuando Vercel asigne el dominio final:
+Con el dominio final de Vercel:
 
-1. Render → `sismo-api` → Environment → editar `CORS_ORIGINS`, por ejemplo:
+1. Render → `sismo-api` → Environment → `CORS_ORIGINS`:
 
    ```json
    ["https://sismo-platform.vercel.app","http://localhost:5173"]
    ```
 
-2. Guardar (Render reinicia el servicio) y recargar la web.
+2. Guardar (Render reinicia) y recargar la web.
 
-Si se usan dominios de *preview* de Vercel, hay que añadirlos también (no se admiten comodines salvo `"*"`,
-que no se recomienda con cookies/tokens).
+Los dominios de *preview* de Vercel cambian en cada push; si los necesitas, agrégalos a mano (no se
+admiten comodines salvo `"*"`, que no se recomienda cuando se envían tokens).
 
-## 4. Verificación posterior
+## 5. Verificación posterior
 
-- `GET https://sismo-api.onrender.com/health` → `{"status":"ok"}`.
-- Login en la web desplegada con el usuario de Supabase.
-- Dashboard/Eventos muestran el catálogo (881 eventos) y el badge **EN VIVO** se pone verde
-  (SSE directo contra Render, sin pasar por Vercel).
-- Render → `sismo-ingesta` → Logs: `Sincronizacion ok: vistos=... insertados=...`.
-- Auditoría registra los `auth.login` nuevos.
+- `GET https://sismo-api.onrender.com/health` → `{"status":"ok"}` (el primer acceso tras inactividad
+  tarda ~30-60 s porque Render free suspende la instancia).
+- Login en la web con el usuario de Supabase.
+- Dashboard/Eventos muestran el catálogo y el badge **EN VIVO** se pone verde (SSE directo a Render).
+- Publicar una estimación: el modelo se carga desde `artifact_blob` aunque no exista el archivo.
+- GitHub Actions → última ejecución de *Ingesta IGP/CENSIS* en verde.
 
-## 5. Limitaciones a tener en cuenta
+## 6. Limitaciones del plan gratuito
 
-- **Artefactos ML**: `ml_experiments.artifact_uri` guarda rutas del equipo local
-  (`/home/luis/.../var/artifacts/*.joblib`). En Render esos archivos no existen, así que tras el
-  primer despliegue hay que **reentrenar los experimentos** desde *Modelos ML → Entrenar*: el
-  entrenamiento corre en el contenedor y deja el `.joblib` en el disco `/app/var/artifacts`.
-  Sin reentrenar, publicar estimaciones desde esos modelos fallará.
-- **Plan free de Render**: el servicio web se suspende a los ~15 minutos sin tráfico (primer acceso
-  lento y reconexión del SSE) y no hay disco persistente. Para un uso real: plan Starter.
-- **Pooler de Supabase**: usar el puerto `5432` (modo sesión). El puerto `6543` (transaction mode)
-  rompe conexiones persistentes de SQLAlchemy.
-- **Secretos**: `DATABASE_URL` y `SECRET_KEY` solo en los paneles de Render/Vercel; `.env` está en
-  `.gitignore`. Rotar la contraseña de Postgres si estuvo en texto plano en algún archivo compartido.
-- **Reportes**: se generan en `REPORTS_DIR` (disco de Render). Para conservarlos entre despliegues
-  hace falta el disco persistente del plan Starter.
+- **Suspensión por inactividad**: Render free duerme la API a los ~15 minutos sin tráfico; la primera
+  petición tarda en despertar y el SSE se reconecta solo.
+- **Sin disco persistente**: `ARTIFACTS_DIR` y `REPORTS_DIR` viven en el contenedor y se borran en
+  cada despliegue. Los modelos no se pierden (van en `artifact_blob`); los reportes sí, pero se
+  generan y descargan al momento.
+- **Reentrenar**: si entrenas un experimento y el contenedor se reinicia antes de que termine, el
+  experimento queda `running`; basta relanzarlo desde *Modelos ML*.
+- **Supabase free**: 500 MB de base de datos y pausa del proyecto tras 7 días sin consultas.
+  Cada modelo ocupa ~4 MB en `artifact_blob`.
+- **Pooler de Supabase**: usar el puerto `5432` (modo sesión). El `6543` (transaction mode) rompe las
+  conexiones persistentes de SQLAlchemy.
+- **Secretos**: `DATABASE_URL`, `SECRET_KEY` y `SEED_ADMIN_PASSWORD` solo en Render/GitHub; el `.env`
+  local está en `.gitignore`. Rota la contraseña de Postgres si estuvo en texto plano en algún chat
+  o archivo compartido.
+
+## 7. Cuando puedas pagar (opcional)
+
+Con el plan Starter de Render (~7 USD/mes) se puede volver al esquema “clásico”:
+
+- Añadir disco persistente montado en `/app/var` (1 GB) al servicio web.
+- Crear un **Background Worker** con el mismo Dockerfile y comando
+  `python /app/services/ingestion/sync.py --loop --interval 300`, y desactivar el workflow de GitHub.
+- Eliminar la copia en BD (`artifact_blob`) si prefieres no duplicar los `.joblib`.
