@@ -47,7 +47,7 @@ El plan free de Render no incluye disco persistente ni workers, por eso:
    |---|---|
    | `DATABASE_URL` | `postgresql+psycopg://postgres.<ref>:<clave>@aws-1-us-west-2.pooler.supabase.com:5432/postgres` |
    | `SEED_ADMIN_PASSWORD` | contraseña del admin (si el usuario ya existe en Supabase no se sobrescribe) |
-   | `CORS_ORIGINS` | `["https://<tu-app>.vercel.app"]` |
+   | `CORS_ORIGINS` | `["https://<tu-app>.vercel.app"]` (también vale `https://a.vercel.app,https://b.vercel.app`) |
    | `SECRET_KEY` | cualquier cadena larga aleatoria (`openssl rand -hex 32`) |
    | `ACCESS_TOKEN_EXPIRE_MINUTES` | `600` |
    | `ARTIFACTS_DIR` | `/app/var/artifacts` |
@@ -86,9 +86,15 @@ consumir minutos; en repositorio privado, cada hora mantiene el consumo dentro d
    |---|---|
    | `VITE_API_URL` | `https://sismo-api.onrender.com` (sin `/` final) |
 
-   Vite incrusta esta variable **en tiempo de build**: si se cambia, hay que volver a desplegar.
+   Vite incrusta esta variable **en tiempo de build**: si se cambia, hay que volver a desplegar
+   (*Deployments → ⋯ → Redeploy*). Sin ella, la web carga pero el login falla con `Failed to fetch`
+   y la propia interfaz avisa de que falta `VITE_API_URL`.
 4. Deploy. `apps/web/vercel.json` ya incluye el rewrite de SPA para que rutas como `/eventos` o
    `/estimaciones` funcionen al recargar.
+
+> Cada despliegue de Vercel recibe una URL propia con sufijo (`mi-app-<hash>.vercel.app`) que cambia
+> en cada push. Usa el dominio estable del proyecto (`mi-app.vercel.app`) o uno propio, y pon ese
+> en `CORS_ORIGINS`.
 
 ## 4. Cerrar el círculo (CORS)
 

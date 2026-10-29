@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { apiUrl, getToken } from "./api";
+import { apiNotConfigured, apiUrl, getToken } from "./api";
 import type { SeismicEvent } from "../types";
 
 /**
@@ -61,6 +61,10 @@ function handleFrame(frame: ServerFrame) {
 }
 
 async function run(self: number) {
+  if (apiNotConfigured()) {
+    publish({ status: "detenido" });
+    return;
+  }
   while (self === epoch && connections > 0) {
     controller = new AbortController();
     try {

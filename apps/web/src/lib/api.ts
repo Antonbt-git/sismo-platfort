@@ -7,6 +7,13 @@ const TOKEN_KEY = "sismo_token";
  */
 export const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 
+const IS_LOCAL_HOST = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+/** true si se desplego sin VITE_API_URL (el navegador no encontraria la API). */
+export function apiNotConfigured(): boolean {
+  return !API_BASE && !IS_LOCAL_HOST;
+}
+
 export function apiUrl(path: string): string {
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
@@ -36,6 +43,12 @@ interface RequestOptions {
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (apiNotConfigured()) {
+    throw new ApiError(
+      0,
+      "La API no esta configurada en este despliegue. Define VITE_API_URL con la URL del backend y vuelve a desplegar.",
+    );
+  }
   const headers: Record<string, string> = {};
   if (options.auth !== false) {
     const token = getToken();
