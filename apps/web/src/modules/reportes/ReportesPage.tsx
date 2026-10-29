@@ -3,7 +3,7 @@ import { Card, EmptyState, ErrorBox, Tag } from "../../components/ui";
 import { api } from "../../lib/api";
 import type { ReportJob } from "../../types";
 import { useAuth } from "../../app/AuthContext";
-import { getToken } from "../../lib/api";
+import { getToken, apiUrl } from "../../lib/api";
 
 const TYPES = [
   { value: "events", label: "Eventos observados" },
@@ -59,7 +59,7 @@ export default function ReportesPage() {
   }
 
   async function download(r: ReportJob) {
-    const res = await fetch(`/api/v1/reports/${r.id}`, {
+    const res = await fetch(apiUrl(`/api/v1/reports/${r.id}`), {
       headers: { Authorization: `Bearer ${getToken()}` },
     });
     if (!res.ok) {

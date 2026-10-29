@@ -1,5 +1,16 @@
 const TOKEN_KEY = "sismo_token";
 
+/**
+ * Base de la API. En desarrollo se deja vacia para usar el proxy de Vite
+ * (`/api` -> localhost:8000); en despliegue (Vercel) se define
+ * VITE_API_URL con la URL publica del backend (Render).
+ */
+export const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+
+export function apiUrl(path: string): string {
+  return path.startsWith("http") ? path : `${API_BASE}${path}`;
+}
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -38,7 +49,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     body = options.formData;
   }
 
-  const res = await fetch(path, { method: options.method ?? "GET", headers, body });
+  const res = await fetch(apiUrl(path), { method: options.method ?? "GET", headers, body });
   if (res.status === 401 && !path.includes("/auth/login")) {
     setToken(null);
     window.location.href = "/login";

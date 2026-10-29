@@ -1,0 +1,65 @@
+# Despliegue en Render: API FastAPI + worker de ingesta IGP/CENSIS.
+# La base de datos vive en Supabase (externa); aqui solo se declaran los servicios.
+# Los valores marcados con `sync: false` se completan en el panel de Render.
+services:
+  - type: web
+    name: sismo-api
+    runtime: docker
+    dockerfilePath: ./infra/docker/Dockerfile.backend
+    dockerContext: .
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: sismo-data
+      mountPath: /app/var
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SEED_ADMIN_EMAIL
+        value: admin@sismoplatform.pe
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "600"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: INGESTA_INTERVAL_SECONDS
+        value: "300"
+      - key: INGESTA_MIN_MAGNITUDE
+        value: "2.5"
+      - key: INGESTA_LOOKBACK_HOURS
+        value: "24"
+      - key: ARTIFACTS_DIR
+        value: /app/var/artifacts
+      - key: REPORTS_DIR
+        value: /app/var/reports
+
+  - type: worker
+    name: sismo-ingesta
+    runtime: docker
+    dockerfilePath: ./infra/docker/Dockerfile.backend
+    dockerContext: .
+    plan: starter
+    region: oregon
+    autoDeploy: true
+    dockerCommand: python /app/services/ingestion/sync.py --loop --interval 300
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: INGESTA_INTERVAL_SECONDS
+        value: "300"
+      - key: INGESTA_MIN_MAGNITUDE
+        value: "2.5"
+      - key: INGESTA_LOOKBACK_HOURS
+        value: "24"
+      - key: ARTIFACTS_DIR
+        value: /app/var/artifacts
+      - key: REPORTS_DIR
+        value: /app/var/reports

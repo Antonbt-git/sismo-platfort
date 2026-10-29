@@ -145,5 +145,6 @@ pytest -q
 
 - `docs/Fase0_alcance.md` — alcance, fuente elegida, politica de alertas, backlog.
 - `docs/operacion.md` — despliegue, backup, restauracion, configuracion operativa, incidentes.
+- `docs/despliegue.md` — publicar la web en Vercel y la API/ingesta en Render (Supabase como BD).
 - `docs/Fase9_checklist.md` — criterios de aceptacion del MVP con su estado.
 - API OpenAPI interactiva en `/docs` (estandar `/api/v1`, paginacion, filtros validados).

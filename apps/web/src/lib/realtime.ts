@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getToken } from "./api";
+import { apiUrl, getToken } from "./api";
 import type { SeismicEvent } from "../types";
 
 /**
@@ -65,7 +65,7 @@ async function run(self: number) {
     controller = new AbortController();
     try {
       const token = getToken();
-      const res = await fetch("/api/v1/events/stream", {
+      const res = await fetch(apiUrl("/api/v1/events/stream"), {
         headers: {
           Accept: "text/event-stream",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
