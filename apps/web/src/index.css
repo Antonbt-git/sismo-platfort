@@ -1,0 +1,170 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Sistema de diseño: indigo de marca sobre fondo lavanda muy claro,
+   tarjetas amplias con sombra tintada y una paleta de apoyo para graficas. */
+@theme {
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-ink: #1b2a5e;
+  --color-ink-deep: #131d45;
+  --color-surface: #f4f5fb;
+
+  --color-brand-50: #f0efff;
+  --color-brand-100: #e3e1ff;
+  --color-brand-200: #cbc8ff;
+  --color-brand-300: #aaa5ff;
+  --color-brand-400: #8981fb;
+  --color-brand-500: #6c63f5;
+  --color-brand-600: #5b52e6;
+  --color-brand-700: #4a42c9;
+  --color-brand-800: #3b36a1;
+  --color-brand-900: #2f2b7d;
+
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  --shadow-soft: 0 1px 2px rgb(27 42 94 / 0.04), 0 10px 28px -14px rgb(27 42 94 / 0.16);
+}
+
+:root {
+  --color-navy: #1b2a5e;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-surface);
+  color: #1c2338;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tablas de los modulos: cabecera suave, sin mayusculas, filas con hover tintado.
+   Reglas sin capa: prevalecen sobre las utilidades heredadas de la tabla. */
+main thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #6b7390;
+}
+
+main thead {
+  background-color: #f6f7fd;
+}
+
+main thead th:first-child {
+  border-top-left-radius: 0.75rem;
+  border-bottom-left-radius: 0.75rem;
+}
+
+main thead th:last-child {
+  border-top-right-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+
+main tbody td {
+  vertical-align: middle;
+}
+
+main tbody tr {
+  transition: background-color 0.15s;
+}
+
+main tbody tr:hover {
+  background-color: #f8f8fe;
+}
+
+/* Los inputs y selects heredan un aspecto consistente en todos los modulos */
+main input[type="text"],
+main input[type="number"],
+main input[type="date"],
+main input[type="datetime-local"],
+main input[type="email"],
+main input[type="password"],
+main input[type="url"],
+main input[type="search"],
+main select,
+main textarea {
+  border-radius: 0.75rem;
+  border: 1px solid #d5d9ea;
+  background-color: #fff;
+  font-size: 0.875rem;
+  color: #1e293b;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+main input:focus,
+main select:focus,
+main textarea:focus {
+  border-color: #6c63f5;
+  box-shadow: 0 0 0 3px rgba(108, 99, 245, 0.18);
+}
+
+.leaflet-container {
+  height: clamp(420px, 62vh, 640px);
+  width: 100%;
+  border-radius: 1rem;
+}
+
+/* Barra dual de magnitud (filtro del mapa): dos thumbs sobre una pista comun.
+   Los thumbs reciben los eventos; el input queda transparente. */
+.mag-range {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.mag-range:focus {
+  outline: none;
+}
+.mag-range::-webkit-slider-runnable-track {
+  height: 6px;
+  background: transparent;
+  border-radius: 9999px;
+}
+.mag-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #5b52e6;
+  box-shadow: 0 1px 3px rgba(27, 42, 94, 0.35);
+  cursor: grab;
+}
+.mag-range::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+.mag-range::-moz-range-track {
+  height: 6px;
+  background: transparent;
+  border-radius: 9999px;
+}
+.mag-range::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #5b52e6;
+  box-shadow: 0 1px 3px rgba(27, 42, 94, 0.35);
+  cursor: grab;
+}
+.mag-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid #6c63f5;
+  outline-offset: 2px;
+}
+.mag-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid #6c63f5;
+  outline-offset: 2px;
+}
